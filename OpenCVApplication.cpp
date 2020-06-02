@@ -474,69 +474,75 @@ void compressRLE(string imagename, int bytes) {
 	string imageurl = "Images/" + imagename + ".bmp";
 	string compressionurl = getCompressionUrl(imagename, bytes);		//Get the path to the compression of the image
 	Mat_<uchar> input = imread(imageurl, CV_LOAD_IMAGE_GRAYSCALE);
+	if (input.cols != 0 && input.rows != 0) {
+		ofstream fout;
+		fout.open(compressionurl, ios::binary | ios::out);					//Open or create the file of the compression
 
-	ofstream fout;
-	fout.open(compressionurl, ios::binary | ios::out);					//Open or create the file of the compression
+		bool lastLabel;
+		int lastLabelNr;
+		char buffer = '\n';
 
-	bool lastLabel;
-	int lastLabelNr;
-	char buffer = '\n';
+		int compSize = 0;
 
-	int compSize = 0;
-
-	for (int i = 0;i < input.rows;i++) {
-		lastLabel = (int)(input(i, 0)) % 2;
-		lastLabelNr = 1;
-		for (int j = 1;j < input.cols;j++) {							//Search on every row
-			if ((int)(input(i, j)) % 2 == lastLabel)	
-				lastLabelNr++;											//If the color is the same as the previous one just increment the number of occurences
-			else {
-				writeInFile(fout, lastLabel, lastLabelNr, bytes);		//Else write the current information in the compression file and continue with the new color
-				compSize += bytes + 1;
-				lastLabel = input(i, j);
-				lastLabelNr = 1;
+		for (int i = 0;i < input.rows;i++) {
+			lastLabel = (int)(input(i, 0)) % 2;
+			lastLabelNr = 1;
+			for (int j = 1;j < input.cols;j++) {							//Search on every row
+				if ((int)(input(i, j)) % 2 == lastLabel)
+					lastLabelNr++;											//If the color is the same as the previous one just increment the number of occurences
+				else {
+					writeInFile(fout, lastLabel, lastLabelNr, bytes);		//Else write the current information in the compression file and continue with the new color
+					compSize += bytes + 1;
+					lastLabel = input(i, j);
+					lastLabelNr = 1;
+				}
 			}
+			writeInFile(fout, lastLabel, lastLabelNr, bytes);				//When it reaches the end it writes the last information in the compression file
+			fout.write(&buffer, sizeof(char));
+			compSize += bytes + 2;
 		}
-		writeInFile(fout, lastLabel, lastLabelNr, bytes);				//When it reaches the end it writes the last information in the compression file
-		fout.write(&buffer, sizeof(char));
-		compSize += bytes + 2;
-	}
 
-	fout.close();
-	compSize *= 8;
-	cout << "Original: " << input.rows * input.cols << " b / " << input.rows * input.cols / 8 <<" B / "<< input.rows * input.cols / 8192 << " KB\n";
-	cout << "Compressed: " << compSize << " b / " << compSize / 8 << " B / " << compSize / 8192 << " KB\n";
-	cout << "Compression ratio: " << (100.0 * (float)compSize) / ((float)(input.rows) * (float)(input.cols)) << "%\n";
+		fout.close();
+		compSize *= 8;
+		cout << "Original: " << input.rows * input.cols << " b / " << input.rows * input.cols / 8 << " B / " << input.rows * input.cols / 8192 << " KB\n";
+		cout << "Compressed: " << compSize << " b / " << compSize / 8 << " B / " << compSize / 8192 << " KB\n";
+		cout << "Compression ratio: " << (100.0 * (float)compSize) / ((float)(input.rows) * (float)(input.cols)) << "%\n";
+	}
+	else
+		cout << "Image not found\n";
 }
 
 void decompressRLE(string imagename, int bytes) {  
 	string compressionurl = getCompressionUrl(imagename, bytes);
 	ifstream fin;
 	fin.open(compressionurl, ios::binary | ios::in);												//Open the compression file
+	if (fin.is_open()) {
+		vector<unsigned char> buffer(istreambuf_iterator<char>(fin), {});								//Read the file into a buffer
+		int ih = imageHeight(buffer, bytes);															//Compute the image height
+		int iw = imageWidth(buffer, bytes);																//Compute the image width
+		Mat_<uchar> output(ih, iw);
 
-	vector<unsigned char> buffer(istreambuf_iterator<char>(fin), {});								//Read the file into a buffer
-	int ih = imageHeight(buffer, bytes);															//Compute the image height
-	int iw = imageWidth(buffer, bytes);																//Compute the image width
-	Mat_<uchar> output(ih, iw);
+		int nr, pos = 0;
+		for (int i = 0;i < buffer.size();i += bytes + 1) {												//Traverse the buffer
+			if (buffer[i] < 2) {																		//If the current byte represents a color continue
+				nr = 0;
+				for (int j = bytes;j >= 1;j--)
+					nr = nr << 8 | static_cast<unsigned char>(buffer[i + j]);							//Convert the occurences to int
 
-	int nr, pos = 0;
-	for (int i = 0;i < buffer.size();i += bytes+1) {												//Traverse the buffer
-		if (buffer[i] < 2) {																		//If the current byte represents a color continue
-			nr = 0;
-			for (int j = bytes;j >= 1;j--)
-				nr = nr << 8 | static_cast<unsigned char>(buffer[i + j]);							//Convert the occurences to int
-
-			for (int j = 0;j < nr;j++)																//Color the pixels 
-				output((pos + j) / iw, (pos + j) % iw) = (buffer[i] == 0) ? (uchar)0 : (uchar)255;
-			pos += nr;
+				for (int j = 0;j < nr;j++)																//Color the pixels 
+					output((pos + j) / iw, (pos + j) % iw) = (buffer[i] == 0) ? (uchar)0 : (uchar)255;
+				pos += nr;
+			}
+			else
+				i -= bytes;
 		}
-		else
-			i -= bytes;
-	}
-	fin.close();
+		fin.close();
 
-	imshow("decompressed", output);
-	waitKey(0);
+		imshow("decompressed", output);
+		waitKey(0);
+	}
+	else
+		cout << "File not found\n";
 
 }
 
@@ -544,20 +550,24 @@ void showBinFile(string imagename, int bytes) {
 	string compressionurl = getCompressionUrl(imagename, bytes);
 	ifstream fin;
 	fin.open(compressionurl, ios::binary | ios::in);						//Open the compression file
-	vector<unsigned char> buffer(istreambuf_iterator<char>(fin), {});		//Read the file into a buffer
-	int nr;
-	for (int i = 0;i < buffer.size();i += bytes+1) {						//Traverse the buffer
-		if (buffer[i] > 1) {												//If we reached the end of a line 
-			cout << '\n';
-			i -= bytes;
+	if (fin.is_open()) {
+
+		vector<unsigned char> buffer(istreambuf_iterator<char>(fin), {});		//Read the file into a buffer
+		int nr;
+		for (int i = 0;i < buffer.size();i += bytes + 1) {						//Traverse the buffer
+			if (buffer[i] > 1) {												//If we reached the end of a line 
+				cout << '\n';
+				i -= bytes;
+			}
+			else {																//else print the color and the occurences
+				nr = 0;
+				for (int j = bytes;j >= 1;j--)
+					nr = nr << 8 | static_cast<unsigned char>(buffer[i + j]);	//Convert the occurences into int
+				cout << "(" << (int)buffer[i] << "," << nr << ")";				//Print
+			}
 		}
-		else {																//else print the color and the occurences
-			nr = 0;
-			for (int j = bytes;j >= 1;j--)
-				nr = nr << 8 | static_cast<unsigned char>(buffer[i + j]);	//Convert the occurences into int
-			cout << "(" << (int)buffer[i] << "," << nr << ")";				//Print
-		}
-	}
+	} else 
+		cout << "File not found\n";
 	fin.close();
 }
 
@@ -566,6 +576,7 @@ void showBinFile(string imagename, int bytes) {
 void menu()
 {
 	int n;
+
 	string str;
 	cout << "1: Compress" << endl;
 	cout << "2: Decompress" << endl;
