@@ -1,0 +1,9 @@
+﻿  stdafx.cpp
+  common.cpp
+  OpenCVApplication.cpp
+C:\Users\Andrei\Desktop\Facultate\IP\Binary-compression-IP-Project-\Project\OpenCVApplication.cpp(491,44): warning C4805: '==': unsafe mix of type 'int' and type 'bool' in operation
+  Generating Code...
+  OpenCVApplication.vcxproj -> C:\Users\Andrei\Desktop\Facultate\IP\Binary-compression-IP-Project-\Project\x64\Debug\OpenCVApplication.exe
+  OpenCV\dll\Debug\opencv_ffmpeg340_64.dll
+  OpenCV\dll\Debug\opencv_world340d.dll
+          2 file(s) copied.
